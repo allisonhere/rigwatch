@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Rigwatch</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ink: #f8fbff; --muted: #6f7a99; --violet: #7c3aff; --magenta: #ff4fc3;
+    --cyan: #32d9ff; --green: #27ef9f; --amber: #ffa62b; --red: #ff3b6b;
+    --panel-bg: #050711; --panel-dim: #202642; --gpu: #bc8cff; --title-bg: #15112b;
+  }
+  body { font-family:'SF Mono','JetBrains Mono','Fira Code','Cascadia Code','Menlo','Consolas',monospace;
+    background:var(--panel-bg); color:var(--ink); max-width:1200px; margin:0 auto; padding:8px; font-size:13px; line-height:1.35; }
+
+  /* ── HERO ── */
+  .hero { margin-bottom:4px; padding:2px 0; }
+  .hero-title { font-size:16px; font-weight:700; letter-spacing:2px; }
+  .hero-title span { display:inline-block; }
+  .hero-sub { color:var(--muted); font-size:11px; margin-top:1px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px; }
+  .signal { font-size:10px; letter-spacing:3px; margin-top:1px; overflow:hidden; white-space:nowrap; position:relative; height:14px; }
+
+  /* ── TOOLBAR ── */
+  .toolbar { display:flex; gap:3px; margin-bottom:6px; padding:2px 0; align-items:center; flex-wrap:wrap; }
+  .btn { font-family:inherit; font-size:10px; text-transform:uppercase; letter-spacing:1px;
+    color:var(--muted); background:transparent; border:1px solid var(--panel-dim); padding:3px 8px; cursor:pointer; transition:all .15s; }
+  .btn:hover { border-color:var(--violet); color:var(--ink); }
+  .btn.active { background:var(--violet); color:var(--ink); border-color:var(--violet); }
+  .sep { color:var(--panel-dim); font-size:10px; }
+  .theme-btn { color:var(--magenta); border-color:var(--panel-dim); }
+
+  .page-nav { display:flex; gap:4px; align-items:center; justify-content:center; margin-bottom:6px; font-size:11px; color:var(--muted); }
+  .page-nav button { font-family:inherit; background:transparent; border:1px solid var(--panel-dim); color:var(--ink); padding:2px 8px; cursor:pointer; font-size:11px; }
+  .page-nav button:disabled { opacity:0.3; cursor:default; }
+  .page-nav span { min-width:40px; text-align:center; }
+
+  /* ── PANEL ── */
+  .pan { margin-bottom:6px; }
+  .ptop { color:var(--violet); font-size:11px; white-space:nowrap; overflow:hidden; }
+  .ptop .pt { color:var(--magenta); font-weight:700; }
+  .pbody { padding:3px 8px 4px 10px; border-left:1px solid var(--violet); border-right:1px solid var(--violet); }
+  .pbot { color:var(--violet); font-size:11px; white-space:nowrap; overflow:hidden; }
+
+  .sect { color:var(--muted); font-size:9px; text-transform:uppercase; letter-spacing:1px; margin:4px 0 2px; }
+  .mr { display:flex; justify-content:space-between; margin-bottom:1px; font-size:12px; }
+  .mr .l { color:var(--muted); } .mr .v { font-weight:600; }
+  .nr { display:flex; gap:10px; font-size:11px; margin:1px 0; } .nr .d { color:var(--muted); }
+  .mgbar { height:4px; margin:2px 0 5px; background:var(--panel-dim); border-radius:2px; position:relative; overflow:hidden; }
+  .mgbar .gf { height:100%; transition:width .8s ease; border-radius:2px; box-shadow:0 0 6px rgba(39,239,159,0.25); }
+  .dt { width:100%; font-size:10px; border-collapse:collapse; } .dt td { padding:1px 2px; } .dt td:last-child { text-align:right; }
+  .pt { width:100%; font-size:10px; border-collapse:collapse; } .pt td { padding:1px 2px; } .pt td:last-child { text-align:right; color:var(--muted); } .pt td:nth-child(2) { text-align:right; }
+
+  .gpu-sub { margin:3px 0; padding:3px 6px; background:#080b1a; border-left:2px solid var(--gpu); }
+  .gpu-sub .gn { color:var(--gpu); font-size:11px; } .gpu-sub .gs { display:flex; gap:8px; flex-wrap:wrap; font-size:11px; }
+  .chip { display:inline-block; padding:1px 4px; font-size:10px; border:1px solid; }
+  .cg { border-color:var(--green); color:var(--green); } .ca { border-color:var(--amber); color:var(--amber); } .cr { border-color:var(--red); color:var(--red); }
+  .err-box { border:1px solid var(--red); padding:6px 10px; color:var(--red); margin-bottom:6px; font-size:12px; }
+  .loading { text-align:center; padding:40px; color:var(--muted); }
+
+  /* ── SPARKLINE ── */
+  .spark { display:flex; gap:1px; align-items:flex-end; height:18px; margin:2px 0; }
+  .spark .sp { width:3px; min-height:1px; border-radius:1px 1px 0 0; }
+
+  /* ── CORE BARS ── */
+  .cores { display:flex; flex-wrap:wrap; gap:2px; margin:2px 0; }
+  .core { display:inline-flex; align-items:center; gap:1px; font-size:8px; color:var(--muted); }
+  .core .cb { width:10px; height:6px; border-radius:1px; }
+
+  /* ── GRID ── */
+  .grid-view .hosts { display:grid; gap:6px; }
+  @media (min-width:800px) { .grid-view .hosts { grid-template-columns:repeat(2,1fr); } }
+
+  /* ── QUAD ── */
+  .quad-view .qgrid { display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+  .qpane { border:1px solid var(--violet); padding:4px 6px; background:var(--panel-bg); font-size:10px; line-height:1.35; min-height:85px; }
+  .qpane .qn { color:var(--magenta); font-weight:700; font-size:11px; margin-bottom:1px; }
+  .qpane .ql { display:flex; justify-content:space-between; } .qpane .qm { color:var(--muted); }
+  .qpane .qb { height:3px; background:var(--panel-dim); margin:1px 0 3px; }
+  .qpane .qb .qf { height:100%; transition:width .8s ease; border-radius:1px; }
+  .qpane .qg { color:var(--gpu); } .qpane .qn2 { color:var(--muted); font-size:9px; }
+
+  /* ── MOBILE ── */
+  .mobile-view .mhosts { display:flex; flex-direction:column; gap:6px; }
+  .mcard { border:1px solid var(--violet); padding:6px 8px; background:var(--panel-bg); font-size:11px; line-height:1.4; }
+  .mcard .mhdr { display:flex; justify-content:space-between; margin-bottom:2px; }
+  .mcard .mn { color:var(--magenta); font-weight:700; font-size:12px; }
+  .mcard .mt { color:var(--muted); font-size:9px; }
+  .mcard .mr2 { display:flex; justify-content:space-between; font-size:11px; }
+  .mcard .ml { color:var(--muted); } .mcard .mv { font-weight:600; }
+  .mcard .mb { height:3px; background:var(--panel-dim); margin:2px 0 4px; }
+  .mcard .mb .mf { height:100%; border-radius:1px; }
+  .mcard .ms { color:var(--muted); font-size:9px; text-transform:uppercase; letter-spacing:1px; margin:4px 0 2px; }
+  .mcard .mf2 { display:flex; gap:4px; flex-wrap:wrap; font-size:10px; }
+
+  @media (max-width:480px) { body { padding:4px; } .hero-title { font-size:14px; } .btn { font-size:9px; padding:2px 6px; } }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-title" id="heroTitle">RIGWATCH</div>
+  <div class="hero-sub">
+    <span id="hostCount">0 host(s)</span>
+    <span>v{{.Version}} · <span id="lastUpdate">—</span></span>
+  </div>
+  <div class="signal" id="signalBar"></div>
+</div>
+
+<div class="toolbar">
+  <button class="btn active" data-view="grid" onclick="setView('grid')">Grid</button>
+  <button class="btn" data-view="quad" onclick="setView('quad')">Quad</button>
+  <button class="btn" data-view="mobile" onclick="setView('mobile')">Phone</button>
+  <span class="sep">│</span>
+  <button class="btn theme-btn" onclick="cycleTheme()" id="themeBtn">Theme: rigwatch</button>
+</div>
+
+<div id="pageNav" class="page-nav" style="display:none">
+  <button id="prevPage" onclick="prevPage()">◀</button>
+  <span id="pageInfo">1 / 1</span>
+  <button id="nextPage" onclick="nextPage()">▶</button>
+</div>
+
+<div id="container"><div class="loading">awaiting telemetry</div></div>
+
+<script>
+const REFRESH_MS = {{.RefreshSec}};
+const PER_PAGE = 4;
+let hostData = [], currentView = 'grid', currentPage = 0, maxPages = 1, themeIdx = 0;
+const COOL_RAMP = ['#7c3aff','#7c3aff','#ff4fc3','#ff4fc3','#32d9ff','#32d9ff','#f8fbff'];
+const THEMES = [
+  {n:'rigwatch',       i:'#f8fbff',m:'#6f7a99',v:'#7c3aff',p:'#ff4fc3',c:'#32d9ff',g:'#27ef9f',a:'#ffa62b',r:'#ff3b6b',bg:'#050711',dm:'#202642',gu:'#bc8cff'},
+  {n:'matrix-pulse',   i:'#d9ffe8',m:'#5f8f72',v:'#00a86b',p:'#7cffb2',c:'#00ff87',g:'#3dff9f',a:'#c8ff4d',r:'#ff4f6a',bg:'#031007',dm:'#173321',gu:'#7cffb2'},
+  {n:'ember-ops',      i:'#fff8ee',m:'#95705f',v:'#d95c25',p:'#ffb36b',c:'#ff8a3d',g:'#ffbf5f',a:'#ffd15c',r:'#ff4d2e',bg:'#140705',dm:'#402018',gu:'#ff8a3d'},
+  {n:'arctic-scan',    i:'#f4fbff',m:'#728a99',v:'#38bdf8',p:'#bae6fd',c:'#6ee7ff',g:'#7dd3fc',a:'#fde68a',r:'#fb7185',bg:'#031019',dm:'#183240',gu:'#6ee7ff'},
+  {n:'amber-crt',      i:'#fff4d6',m:'#9f8251',v:'#c9972d',p:'#ffe08a',c:'#ffbf3f',g:'#ffd166',a:'#f4e06d',r:'#ff5f3f',bg:'#120d03',dm:'#3c2f12',gu:'#ffbf3f'},
+  {n:'dracula',        i:'#f8f8f2',m:'#6272a4',v:'#bd93f9',p:'#ff79c6',c:'#8be9fd',g:'#50fa7b',a:'#f1fa8c',r:'#ff5555',bg:'#191a21',dm:'#343746',gu:'#bd93f9'},
+  {n:'nord',           i:'#eceff4',m:'#81a1c1',v:'#5e81ac',p:'#b48ead',c:'#88c0d0',g:'#a3be8c',a:'#ebcb8b',r:'#bf616a',bg:'#121821',dm:'#2e3440',gu:'#88c0d0'},
+  {n:'gruvbox-dark',   i:'#ebdbb2',m:'#928374',v:'#d3869b',p:'#fe8019',c:'#83a598',g:'#b8bb26',a:'#fabd2f',r:'#fb4934',bg:'#1d2021',dm:'#3c3836',gu:'#83a598'},
+  {n:'solarized-dark', i:'#eee8d5',m:'#839496',v:'#268bd2',p:'#d33682',c:'#2aa198',g:'#859900',a:'#b58900',r:'#dc322f',bg:'#002b36',dm:'#073642',gu:'#2aa198'},
+  {n:'catppuccin-m',   i:'#cdd6f4',m:'#7f849c',v:'#cba6f7',p:'#f5c2e7',c:'#89dceb',g:'#a6e3a1',a:'#f9e2af',r:'#f38ba8',bg:'#11111b',dm:'#313244',gu:'#cba6f7'},
+];
+
+function applyTheme(t) {
+  document.documentElement.style.setProperty('--ink',t.i); document.documentElement.style.setProperty('--muted',t.m);
+  document.documentElement.style.setProperty('--violet',t.v); document.documentElement.style.setProperty('--magenta',t.p);
+  document.documentElement.style.setProperty('--cyan',t.c); document.documentElement.style.setProperty('--green',t.g);
+  document.documentElement.style.setProperty('--amber',t.a); document.documentElement.style.setProperty('--red',t.r);
+  document.documentElement.style.setProperty('--panel-bg',t.bg); document.documentElement.style.setProperty('--panel-dim',t.dm);
+  document.documentElement.style.setProperty('--gpu',t.gu);
+  document.getElementById('themeBtn').textContent = 'Theme: '+t.n;
+  renderAll();
+}
+function cycleTheme() { themeIdx=(themeIdx+1)%THEMES.length; applyTheme(THEMES[themeIdx]); }
+
+/* ── Helpers ── */
+function heatGrad(pct) {
+  if (pct<50) { let t=pct/50; return `linear-gradient(90deg,#27ef9f ${pct*.7}%,${lerp('#27ef9f','#f5e842',t)} ${pct*1.3}%)`; }
+  let t=(pct-50)/50; return `linear-gradient(90deg,#27ef9f ${pct*.7}%,#f5e842,${lerp('#f5e842','#ff3b4b',t)} ${pct*1.3}%)`;
+}
+function lerp(a,b,t) {
+  const ah=parseInt(a.slice(1),16), bh=parseInt(b.slice(1),16);
+  const r=Math.round((ah>>16)+((bh>>16)-(ah>>16))*t), g=Math.round(((ah>>8)&0xff)+(((bh>>8)&0xff)-((ah>>8)&0xff))*t), bl=Math.round((ah&0xff)+((bh&0xff)-(ah&0xff))*t);
+  return '#'+(r<<16|g<<8|bl).toString(16).padStart(6,'0');
+}
+function fmtB(b) { if(!b) return '0B'; const u=['B','KB','MB','GB','TB']; let i=0,v=b; while(v>=1024&&i<u.length-1){v/=1024;i++} return v.toFixed(i>0?1:0)+u[i]; }
+function fmtR(b) { if(!b) return '0'; if(b>=1e9) return (b/1e9).toFixed(2)+'G'; if(b>=1e6) return (b/1e6).toFixed(1)+'M'; if(b>=1e3) return (b/1e3).toFixed(0)+'K'; return b.toFixed(0); }
+function sName(n) { if(!n) return '?'; return n.replace(/^(package|physical|core|cpu)\s+/i,'').trim().substring(0,10); }
+
+function hbar(pct, glow) {
+  const g = glow||heatGrad(pct);
+  return `<div class="mgbar"><div class="gf" style="width:${Math.min(100,pct)}%;background:${g}"></div></div>`;
+}
+function spark(vals, color) {
+  if(!vals||vals.length<2) return '';
+  const mx=Math.max(...vals,1);
+  return '<div class="spark">'+vals.map(v=>{
+    const h=Math.max(1,(v/mx)*16);
+    return `<div class="sp" style="height:${h}px;background:${color||'var(--cyan)'}"></div>`;
+  }).join('')+'</div>';
+}
+function coreBars(cores) {
+  if(!cores||!cores.length) return '';
+  return '<div class="cores">'+cores.map(c=>{
+    const p=c.UsagePercent||0;
+    const col=p>=70?'var(--red)':p>=50?'var(--amber)':'var(--green)';
+    return `<span class="core">${c.Index}<span class="cb" style="background:${col};opacity:${.3+p/100*.7}"></span></span>`;
+  }).join('')+'</div>';
+}
+
+function setView(v) { currentView=v; currentPage=0; document.querySelectorAll('.btn[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===v)); renderAll(); }
+function prevPage() { if(currentPage>0){currentPage--;renderAll();} }
+function nextPage() { if(currentPage<maxPages-1){currentPage++;renderAll();} }
+
+function pan(title, body) {
+  const t='─'; const c=36;
+  return `<div class="pan"><div class="ptop">╭<span class="pt"> ${title} </span>${t.repeat(Math.max(1,c-title.length-2))}╮</div><div class="pbody">${body}</div><div class="pbot">╰${t.repeat(c)}╯</div></div>`;
+}
+
+/* ── GRID ── */
+function renderCard(snap) {
+  if(snap.error) return pan('◈ '+snap.name, `<span style="color:var(--red)">✗ ${snap.error}</span>`);
+  const info=snap.info; if(!info) return pan('◈ '+snap.name, `<span style="color:var(--muted)">awaiting telemetry</span>`);
+
+  let cpu=info.CPU||{}, ram=info.RAM||{}, gpus=info.GPUs||[], temps=info.Temps||[];
+  let disks=info.Disk||[], nets=info.Network||[], procs=info.Processes||[], hist=snap.history||{};
+  let cp=cpu.UsagePercent||0, rp=ram.UsagePercent||0;
+  let rs=ram.Used?(ram.Used/1024).toFixed(1):'?', rt=ram.Total?(ram.Total/1024).toFixed(1):'?';
+
+  let b='';
+
+  // CPU
+  b+=`<div class="sect">CPU LOAD</div><div class="mr"><span class="l">${cpu.Model?cpu.Model.replace(/\(R\)|\(TM\)|\(r\)|\(tm\)/g,'').replace(/  +/g,' ').substring(0,40):'Usage'}</span><span class="v">${cp.toFixed(1)}%</span></div>`;
+  b+=hbar(cp);
+  if(cpu.Count) b+=`<div class="mr" style="font-size:10px"><span class="l">${cpu.Count}c</span></div>`;
+  if(hist.cpu&&hist.cpu.length>1) b+=`<div class="sect" style="margin-top:0">TREND</div>${spark(hist.cpu)}`;
+  if(cpu.Cores&&cpu.Cores.length) b+=coreBars(cpu.Cores);
+
+  // RAM
+  b+=`<div class="sect">RAM MATRIX</div><div class="mr"><span class="l">Used</span><span class="v">${rs} / ${rt} GB (${rp.toFixed(1)}%)</span></div>`;
+  b+=hbar(rp);
+  if(hist.ram&&hist.ram.length>1) b+=`<div class="sect" style="margin-top:0">TREND</div>${spark(hist.ram, 'var(--accent)')}`;
+
+  // GPU
+  if(gpus.length) {
+    b+=`<div class="sect">GPU</div>`;
+    for(const g of gpus) {
+      let nm=g.Name||''; if(nm.length>30) nm=nm.substring(0,27)+'…';
+      b+=`<div class="gpu-sub"><div class="gn">${nm}</div><div class="gs">`;
+      b+=`<span>Util <strong>${g.Utilization}%</strong></span>`;
+      b+=`<span>VRAM ${(g.VRAMUsed/1024).toFixed(1)}/${(g.VRAMTotal/1024).toFixed(1)}G</span>`;
+      b+=`<span>${g.Temperature}°C</span>`;
+      if(g.PowerDraw>0) b+=`<span>${g.PowerDraw}W${g.PowerLimit>0?'/'+g.PowerLimit+'W':''}</span>`;
+      b+=`</div></div>`;
+      b+=`<div style="font-size:10px;color:var(--gpu)">UTIL</div>${hbar(g.Utilization)}`;
+      let vp=g.VRAMTotal>0?(g.VRAMUsed/g.VRAMTotal*100):0;
+      b+=`<div style="font-size:10px;color:var(--gpu)">VRAM</div>${hbar(vp)}`;
+    }
+    if(hist.gpu&&hist.gpu.length>1) b+=`${spark(hist.gpu,'var(--gpu)')}`;
+  }
+
+  // Temps
+  if(temps.length) {
+    b+=`<div class="sect">Temps</div><div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:3px">`;
+    for(const t of temps) {
+      let p=Math.min(100,t.Celsius/100*100);
+      b+=`<span class="chip ${p>=70?'cr':p>=50?'ca':'cg'}">${sName(t.Name)} ${t.Celsius.toFixed(1)}°C</span>`;
+    }
+    b+=`</div>`;
+    let mx=Math.max(...temps.map(t=>t.Celsius));
+    b+=hbar(Math.min(100,mx));
+    if(hist.temp&&hist.temp.length>1) b+=spark(hist.temp,'var(--temp)');
+  }
+
+  // Disk
+  if(disks.length) {
+    b+=`<div class="sect">DISK ARRAY</div><table class="dt">`;
+    for(const d of disks) {
+      let dp=parseInt(d.UsagePercent)||0;
+      b+=`<tr><td>${d.MountPoint}</td><td>${d.Used}/${d.Size}</td><td><span class="chip ${dp>=70?'cr':dp>=50?'ca':'cg'}">${d.UsagePercent}</span></td></tr>`;
+    }
+    b+=`</table>`;
+  }
+
+  // Network
+  if(nets.length) {
+    b+=`<div class="sect">NETWORK I/O</div><div style="font-size:10px;color:var(--muted);display:flex;gap:8px;margin-bottom:2px">`;
+    b+=`<span style="width:30px">IFACE</span><span>RX</span><span>TX</span></div>`;
+    for(const n of nets) {
+      b+=`<div class="nr"><span style="width:30px">${n.Name}</span><span class="d">⬇${fmtR(n.RXBps)}</span><span class="d">⬆${fmtR(n.TXBps)}</span><span style="color:var(--muted);font-size:9px">${fmtB(n.RXBytes)}/${fmtB(n.TXBytes)}</span></div>`;
+    }
+    if(hist.network&&hist.network.length>1) b+=spark(hist.network,'var(--muted)');
+  }
+
+  // Processes
+  if(procs.length) {
+    b+=`<div class="sect">Top Processes</div><table class="pt">`;
+    let n=0;
+    for(const p of procs) {
+      if(n>=5) break; if(p.CPUPercent<0.1) continue;
+      let c=p.Command||''; if(c.length>22) c=c.substring(0,19)+'…';
+      b+=`<tr><td>${c}</td><td>${p.CPUPercent.toFixed(1)}%</td><td>${p.MemPercent.toFixed(1)}%</td></tr>`; n++;
+    }
+    b+=`</table>`;
+  }
+
+  return pan('◈ '+snap.name, b);
+}
+
+/* ── QUAD ── */
+function renderQuad(snap) {
+  if(snap.error) return `<div class="qpane"><div class="qn">${snap.name}</div><div style="color:var(--red)">✗</div></div>`;
+  const info=snap.info; if(!info) return `<div class="qpane"><div class="qn">${snap.name}</div><div class="qm">awaiting</div></div>`;
+  let cpu=info.CPU||{}, ram=info.RAM||{}, gpus=info.GPUs||[], temps=info.Temps||[], nets=info.Network||[];
+  let cp=cpu.UsagePercent||0, rp=ram.UsagePercent||0;
+  let gl='',gb=''; if(gpus.length){let u=gpus.reduce((s,g)=>s+g.Utilization,0)/gpus.length; gl=`<div class="ql"><span class="qm">GPU</span><span class="qg">${u.toFixed(0)}%</span></div>`; gb=`<div class="qb"><div class="qf" style="width:${u}%;background:var(--gpu)"></div></div>`;}
+  let tl=''; if(temps.length){let mx=Math.max(...temps.map(t=>t.Celsius)); tl=`<div class="ql"><span class="qm">TEMP</span><span style="color:var(--temp)">${mx.toFixed(1)}°C</span></div>`;}
+  let nl=''; if(nets.length){let rx=nets.reduce((s,n)=>s+n.RXBps,0),tx=nets.reduce((s,n)=>s+n.TXBps,0); nl=`<div class="qn2">⬇${fmtR(rx)} ⬆${fmtR(tx)}</div>`;}
+  return `<div class="qpane"><div class="qn">${snap.name}</div><div class="ql"><span class="qm">CPU</span><span>${cp.toFixed(1)}%</span></div><div class="qb"><div class="qf" style="width:${cp}%;background:${heatGrad(cp)}"></div></div><div class="ql"><span class="qm">RAM</span><span>${ram.Used?(ram.Used/1024).toFixed(0):'?'}/${ram.Total?(ram.Total/1024).toFixed(0):'?'}G</span></div><div class="qb"><div class="qf" style="width:${rp}%;background:${heatGrad(rp)}"></div></div>${gl}${gb}${tl}${nl}</div>`;
+}
+
+/* ── MOBILE ── */
+function renderMobile(snap) {
+  if(snap.error) return `<div class="mcard"><div class="mhdr"><span class="mn">${snap.name}</span><span style="color:var(--red)">✗</span></div><div style="color:var(--red);font-size:11px">${snap.error}</div></div>`;
+  const info=snap.info; if(!info) return `<div class="mcard"><div class="mhdr"><span class="mn">${snap.name}</span><span class="mt">connecting</span></div></div>`;
+  let cpu=info.CPU||{}, ram=info.RAM||{}, gpus=info.GPUs||[], temps=info.Temps||[], nets=info.Network||[], disks=info.Disk||[];
+  let cp=cpu.UsagePercent||0, rp=ram.UsagePercent||0;
+  let h=`<div class="mcard"><div class="mhdr"><span class="mn">${snap.name}</span><span class="mt">${snap.updated?new Date(snap.updated).toLocaleTimeString():''}</span></div>`;
+  h+=`<div class="mr2"><span class="ml">CPU</span><span class="mv">${cp.toFixed(1)}%</span></div><div class="mb"><div class="mf" style="width:${cp}%;background:${heatGrad(cp)}"></div></div>`;
+  if(ram.Total){h+=`<div class="mr2"><span class="ml">RAM</span><span class="mv">${(ram.Used/1024).toFixed(1)}/${(ram.Total/1024).toFixed(1)}GB</span></div><div class="mb"><div class="mf" style="width:${rp}%;background:${heatGrad(rp)}"></div></div>`;}
+  if(gpus.length){h+=`<div class="ms">GPU</div><div class="mf2">`; for(const g of gpus){let nm=g.Name||'';if(nm.length>26)nm=nm.substring(0,23)+'…';h+=`<span>${nm}</span><span>${g.Utilization}%</span><span>${g.Temperature}°C</span>`;} h+=`</div>`;}
+  if(temps.length){h+=`<div class="ms">Temps</div><div class="mf2">`; for(const t of temps){let p=Math.min(100,t.Celsius/100*100);h+=`<span class="mchip ${p>=70?'cr':p>=50?'ca':'cg'}">${sName(t.Name)} ${t.Celsius.toFixed(1)}°C</span>`;} h+=`</div>`;}
+  if(disks.length){let r=disks.find(d=>d.MountPoint==='/');if(r)h+=`<div class="mr2" style="font-size:10px"><span class="ml">Disk /</span><span>${r.Used}/${r.Size} (${r.UsagePercent})</span></div>`;}
+  if(nets.length){h+=`<div class="ms">Net</div><div class="mf2">`; for(const n of nets) h+=`<span style="font-size:10px">⬇${fmtR(n.RXBps)} ⬆${fmtR(n.TXBps)}</span>`; h+=`</div>`;}
+  h+=`</div>`; return h;
+}
+
+function renderAll() {
+  const c=document.getElementById('container'), pn=document.getElementById('pageNav');
+  document.getElementById('hostCount').textContent=hostData.length+' host(s)';
+  document.getElementById('lastUpdate').textContent=new Date().toLocaleTimeString();
+  if(!hostData.length){c.innerHTML='<div class="loading">no hosts</div>';pn.style.display='none';return;}
+  const sorted=[...hostData].sort((a,b)=>{if(a.error&&!b.error)return 1;if(!a.error&&b.error)return -1;return 0;});
+  c.className='';
+  if(currentView==='quad'){
+    c.className='quad-view'; maxPages=Math.ceil(sorted.length/PER_PAGE); currentPage=Math.min(currentPage,maxPages-1);
+    const start=currentPage*PER_PAGE; const page=sorted.slice(start,start+PER_PAGE); while(page.length<PER_PAGE) page.push(null);
+    pn.style.display=maxPages>1?'flex':'none';
+    document.getElementById('prevPage').disabled=currentPage<=0; document.getElementById('nextPage').disabled=currentPage>=maxPages-1;
+    document.getElementById('pageInfo').textContent=(currentPage+1)+'/'+maxPages;
+    c.innerHTML='<div class="qgrid">'+page.map(h=>h?renderQuad(h):'<div class="qpane"></div>').join('')+'</div>';
+  } else if(currentView==='mobile'){c.className='mobile-view';pn.style.display='none';c.innerHTML='<div class="mhosts">'+sorted.map(renderMobile).join('')+'</div>';}
+  else{c.className='grid-view';pn.style.display='none';c.innerHTML='<div class="hosts">'+sorted.map(renderCard).join('')+'</div>';}
+}
+
+/* ── Signal bar animation ── */
+function animateSignal() {
+  const el=document.getElementById('signalBar');
+  const chars=['▁','▂','▃','▄','▅','▆','▇','█','▇','▆','▅','▄','▃','▂'];
+  const theme=THEMES[themeIdx];
+  let frame=0;
+  setInterval(()=>{
+    const peak=Math.sin(frame*0.08)*6+7;
+    let html='';
+    for(let i=0;i<30;i++){
+      const dist=Math.abs(i-peak);
+      const inten=Math.exp(-(dist*dist)/25)*(0.85+0.15*Math.sin(frame*0.37));
+      const idx=Math.round(inten*(chars.length-1));
+      const bright=Math.round(100+155*inten);
+      html+=`<span style="color:${theme.c||'#32d9ff'};opacity:${0.2+0.8*inten}">${chars[Math.min(idx,chars.length-1)]}</span>`;
+    }
+    el.innerHTML=html;
+    frame++;
+  }, 80);
+}
+
+/* ── Per-character gradient title ── */
+function renderTitle() {
+  const el=document.getElementById('heroTitle');
+  const text='RIGWATCH';
+  const ramp=COOL_RAMP;
+  el.innerHTML=text.split('').map((ch,i)=>{
+    const c=ramp[Math.round(i/(text.length-1)*(ramp.length-1))];
+    return `<span style="color:${c}">${ch}</span>`;
+  }).join('');
+}
+
+async function fetchData() {
+  try{const r=await fetch('/api/hosts');hostData=await r.json();renderAll();}
+  catch(e){document.getElementById('container').innerHTML='<div class="err-box">✗ connection error</div>';}
+}
+
+renderTitle(); animateSignal(); fetchData(); setInterval(fetchData, REFRESH_MS);
+</script>
+</body>
+</html>

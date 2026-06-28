@@ -11,6 +11,7 @@ import (
 
 	"github.com/allisonhere/rigwatch/internal"
 	"github.com/allisonhere/rigwatch/internal/ui"
+	"github.com/allisonhere/rigwatch/internal/web"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -23,6 +24,8 @@ func validateInterval(seconds float64) time.Duration {
 
 func main() {
 	var showVersion bool
+	var webMode bool
+	var webPort int
 
 	flag.Usage = func() {
 		// HACK: make it look like python's argparse
@@ -30,10 +33,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fmt.Fprintf(os.Stderr, "  -n, --interval float  Update interval in seconds (default: 5, or SSH_DASHBOARD_INTERVAL env var)\n")
 		fmt.Fprintf(os.Stderr, "  -v, --version         Show version information\n")
+		fmt.Fprintf(os.Stderr, "  -w, --web             Start web dashboard server (no TUI)\n")
+		fmt.Fprintf(os.Stderr, "  -p, --port int        Web server port (default: 8080, used with --web)\n")
 		fmt.Fprintf(os.Stderr, "  -h, --help            Show this help message\n")
 		fmt.Fprintf(os.Stderr, "\nArguments:\n")
 		fmt.Fprintf(os.Stderr, "  HOST...               One or more hostnames from SSH config to connect to directly\n")
-		fmt.Fprintf(os.Stderr, "                        Example: rigwatch myHost myOtherHost\n")
+		fmt.Fprintf(os.Stderr, "                        Example: rigwatch myHost myOtherHost --web\n")
 	}
 
 	var updateIntervalVal float64
@@ -41,6 +46,10 @@ func main() {
 	flag.Float64Var(&updateIntervalVal, "interval", 0, "")
 	flag.BoolVar(&showVersion, "v", false, "")
 	flag.BoolVar(&showVersion, "version", false, "")
+	flag.BoolVar(&webMode, "w", false, "")
+	flag.BoolVar(&webMode, "web", false, "")
+	flag.IntVar(&webPort, "p", 8080, "")
+	flag.IntVar(&webPort, "port", 8080, "")
 	flag.Parse()
 
 	requestedHosts := flag.Args()
@@ -105,8 +114,26 @@ func main() {
 			}
 		}
 
+		if webMode {
+			svr := web.NewServer(selectedHosts, interval, webPort)
+			if err := svr.Start(); err != nil {
+				fmt.Fprintf(os.Stderr, "Error starting web server: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
 		initialModel = ui.InitialModelWithHosts(hosts, selectedHosts, interval)
 	} else {
+		if webMode {
+			// Web mode with no specific hosts: monitor all
+			svr := web.NewServer(hosts, interval, webPort)
+			if err := svr.Start(); err != nil {
+				fmt.Fprintf(os.Stderr, "Error starting web server: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
 		initialModel = ui.InitialModel(hosts, interval)
 	}
 
