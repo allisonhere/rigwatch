@@ -209,10 +209,10 @@ func (p AMDProvider) queryLegacy(runCmd base.RunCmdFunc) ([]base.Device, error) 
 // amdPCIVendor is the PCI vendor ID the kernel reports for AMD/ATI devices.
 const amdPCIVendor = "0x1002"
 
-// discreteVRAMFloorMB separates a discrete card from an APU's carve-out. An
-// integrated Radeon reports a few hundred MB of stolen system memory; a real
-// board reports its soldered VRAM. This is a heuristic, but it beats matching
-// on marketing names, which change every generation.
+// discreteVRAMFloorMB is the last-resort size test for telling a board from an
+// APU's carve-out, used only when better signals are unavailable. It is the
+// weakest of the three checks in isDiscrete: a mini-PC or handheld configured
+// with a large UMA carve-out looks exactly like a discrete card by size alone.
 const discreteVRAMFloorMB = 1024
 
 // DRMProbeCommand reads every value the fallback needs in one round trip. Probing
@@ -224,6 +224,7 @@ const DRMProbeCommand = "grep -H . " +
 	"/sys/class/drm/card*/device/uevent " +
 	"/sys/class/drm/card*/device/gpu_busy_percent " +
 	"/sys/class/drm/card*/device/mem_info_vram_total " +
+	"/sys/class/drm/card*/device/mem_info_vram_vendor " +
 	"/sys/class/drm/card*/device/mem_info_vram_used " +
 	"/sys/class/drm/card*/device/hwmon/hwmon*/temp1_input " +
 	"/sys/class/drm/card*/device/hwmon/hwmon*/temp2_input " +
@@ -340,7 +341,7 @@ func discreteAMDCards(runCmd base.RunCmdFunc) []drmCard {
 		if card.attrs["vendor"] != amdPCIVendor {
 			continue
 		}
-		if card.intAttr("mem_info_vram_total")/1048576 < discreteVRAMFloorMB {
+		if !card.isDiscrete() {
 			continue
 		}
 		cards = append(cards, *card)
@@ -373,6 +374,32 @@ func lspciAMDNames(runCmd base.RunCmdFunc) map[string]string {
 		}
 	}
 	return names
+}
+
+// isDiscrete reports whether the card is a board rather than integrated
+// graphics, trying three signals in order of how much they can be trusted.
+func (c drmCard) isDiscrete() bool {
+	// The memory technology is the honest answer: a board has GDDR or HBM
+	// soldered to it, while an APU carves its "VRAM" out of system DDR. This is
+	// what the size test below gets wrong on a machine with a large UMA
+	// carve-out, where an iGPU reports as much memory as a mid-range card.
+	switch vram := strings.ToLower(c.attrs["mem_info_vram_vendor"]); {
+	case strings.HasPrefix(vram, "gddr"), strings.HasPrefix(vram, "hbm"):
+		return true
+	case strings.HasPrefix(vram, "ddr"), strings.HasPrefix(vram, "lpddr"):
+		return false
+	}
+
+	// No memory vendor reported (older amdgpu, or the legacy radeon driver):
+	// fall back to sensor topology. A board carries a junction or memory sensor
+	// beyond the edge temperature; integrated graphics generally expose only the
+	// edge reading.
+	if c.intAttr("temp2_input") > 0 {
+		return true
+	}
+
+	// Nothing else to go on: a card with real VRAM is almost certainly a board.
+	return c.intAttr("mem_info_vram_total")/1048576 >= discreteVRAMFloorMB
 }
 
 func (c drmCard) intAttr(name string) int {

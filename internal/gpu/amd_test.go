@@ -15,6 +15,7 @@ const drmProbeFixture = `/sys/class/drm/card0/device/vendor:0x1002
 /sys/class/drm/card0/device/gpu_busy_percent:0
 /sys/class/drm/card0/device/mem_info_vram_total:536870912
 /sys/class/drm/card0/device/mem_info_vram_used:8388608
+/sys/class/drm/card0/device/mem_info_vram_vendor:unknown
 /sys/class/drm/card0/device/hwmon/hwmon1/temp1_input:41000
 /sys/class/drm/card1/device/vendor:0x1002
 /sys/class/drm/card1/device/uevent:DRIVER=amdgpu
@@ -22,6 +23,7 @@ const drmProbeFixture = `/sys/class/drm/card0/device/vendor:0x1002
 /sys/class/drm/card1/device/gpu_busy_percent:73
 /sys/class/drm/card1/device/mem_info_vram_total:17163091968
 /sys/class/drm/card1/device/mem_info_vram_used:4294967296
+/sys/class/drm/card1/device/mem_info_vram_vendor:gddr6
 /sys/class/drm/card1/device/hwmon/hwmon2/temp1_input:58000
 /sys/class/drm/card1/device/hwmon/hwmon2/temp2_input:71000
 /sys/class/drm/card1/device/hwmon/hwmon2/power1_average:214000000
@@ -168,5 +170,60 @@ func TestAMDVendorToolingStillWins(t *testing.T) {
 	})
 	if probed {
 		t.Fatal("sysfs probed even though rocm-smi is installed")
+	}
+}
+
+func TestAMDSysfsRejectsAPUWithLargeUMACarveOut(t *testing.T) {
+	// A handheld or mini-PC can hand its integrated Radeon a 16 GB carve-out,
+	// which passes any size threshold. The memory technology is what separates
+	// it from a board: system DDR, not soldered GDDR.
+	probe := `/sys/class/drm/card0/device/vendor:0x1002
+/sys/class/drm/card0/device/uevent:PCI_SLOT_NAME=0000:c5:00.0
+/sys/class/drm/card0/device/gpu_busy_percent:11
+/sys/class/drm/card0/device/mem_info_vram_total:17179869184
+/sys/class/drm/card0/device/mem_info_vram_vendor:ddr5
+/sys/class/drm/card0/device/hwmon/hwmon3/temp1_input:47000
+`
+	if _, err := (AMDProvider{}).Query(sysfsOnlyHost(probe, "")); err == nil {
+		t.Fatal("a 16 GB UMA carve-out was reported as a discrete GPU")
+	}
+}
+
+func TestAMDSysfsAcceptsBoardByMemoryTechnologyAlone(t *testing.T) {
+	// Small-VRAM board with no junction sensor: neither fallback would accept
+	// it, but GDDR settles the question.
+	probe := `/sys/class/drm/card0/device/vendor:0x1002
+/sys/class/drm/card0/device/uevent:PCI_SLOT_NAME=0000:01:00.0
+/sys/class/drm/card0/device/mem_info_vram_total:536870912
+/sys/class/drm/card0/device/mem_info_vram_vendor:gddr5
+/sys/class/drm/card0/device/hwmon/hwmon0/temp1_input:44000
+`
+	devices, err := (AMDProvider{}).Query(sysfsOnlyHost(probe, ""))
+	if err != nil {
+		t.Fatalf("Query returned error: %v", err)
+	}
+	if len(devices) != 1 {
+		t.Fatalf("devices len = %d, want 1", len(devices))
+	}
+}
+
+func TestAMDSysfsFallsBackToSensorTopology(t *testing.T) {
+	// Older amdgpu does not publish mem_info_vram_vendor. A junction sensor
+	// beyond the edge reading still marks the card as a board.
+	probe := `/sys/class/drm/card0/device/vendor:0x1002
+/sys/class/drm/card0/device/uevent:PCI_SLOT_NAME=0000:01:00.0
+/sys/class/drm/card0/device/mem_info_vram_total:536870912
+/sys/class/drm/card0/device/hwmon/hwmon0/temp1_input:44000
+/sys/class/drm/card0/device/hwmon/hwmon0/temp2_input:61000
+`
+	devices, err := (AMDProvider{}).Query(sysfsOnlyHost(probe, ""))
+	if err != nil {
+		t.Fatalf("Query returned error: %v", err)
+	}
+	if len(devices) != 1 {
+		t.Fatalf("devices len = %d, want 1", len(devices))
+	}
+	if devices[0].Temperature != 61 {
+		t.Errorf("Temperature = %d, want 61 (junction)", devices[0].Temperature)
 	}
 }
