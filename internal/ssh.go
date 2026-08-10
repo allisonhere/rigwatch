@@ -490,6 +490,7 @@ func isAllowedCommand(cmd string) bool {
 		"cat /proc/uptime",
 		"grep -H . /sys/class/thermal/thermal_zone*/type /sys/class/thermal/thermal_zone*/temp",
 		"grep -H . /sys/class/hwmon/hwmon*/temp*_label /sys/class/hwmon/hwmon*/temp*_input 2>/dev/null || true",
+		gpu.DRMProbeCommand,
 		"find -L /sys/class/hwmon -maxdepth 2 \\( -name 'temp*_input' -o -name 'temp*_label' \\) -exec grep -H . {} + 2>/dev/null || true",
 		"find -L /sys/class/hwmon -maxdepth 2 \\( -name 'fan*_input' -o -name 'fan*_label' \\) -exec grep -H . {} + 2>/dev/null || true",
 		"ps -eo pid=,comm=,pcpu=,pmem= --sort=-pcpu | head -n 25",
@@ -510,6 +511,7 @@ func isAllowedCommand(cmd string) bool {
 		"rocm-smi ",
 		"free -",
 		"df -",
+		"cat /sys/class/drm/",
 		"lspci ",
 	}
 

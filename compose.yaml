@@ -1,0 +1,34 @@
+services:
+  rigwatch:
+    build:
+      context: .
+      # No build args — Dockerfile auto-derives GIT_TAG/GIT_COMMIT/BUILD_DATE
+      # from the .git dir. Override with --build-arg if needed.
+    container_name: rigwatch-web
+    restart: unless-stopped
+    # Explicit opt-in to LAN exposure: the binary default is 127.0.0.1 (loopback).
+    # The web API is unauthenticated, so keep 0.0.0.0 only on trusted networks —
+    # a loud warning is logged at startup when binding all interfaces.
+    # ENTRYPOINT is already `rigwatch`, so args only (no binary name)
+    command: ["--web", "--port", "8081", "--bind", "0.0.0.0"]
+    # Must share host network so SSH to monitored hosts uses the host's routes
+    # and the web server binds directly on the host interfaces.
+    network_mode: host
+    volumes:
+      # SSH config & keys for connecting to monitored hosts
+      - ~/.ssh:/root/.ssh:ro
+      # Known hosts file gets updated as hosts are connected to
+      - ~/.ssh/known_hosts:/root/.ssh/known_hosts
+      # Rigwatch managed SSH config (for key installs, etc.)
+      - ~/.ssh/rigwatch-config.d:/root/.ssh/rigwatch-config.d:ro
+      # Host sysfs (read-only) so AMD/NVIDIA GPU detection sees the real GPU
+      - /sys:/sys:ro
+    environment:
+      - TZ=America/Chicago
+    # Health check: use 127.0.0.1, not localhost — inside the container localhost
+    # can resolve to ::1 while the server binds IPv4 127.0.0.1
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/api/hosts"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
